@@ -29,7 +29,7 @@ function elementCreate(element) {
 
         var value = isComponent(element)
             ? evalExpr(prop.expr, element.data, element)
-            : nodeEvalExpr(element, prop.expr, 1);
+            : nodeEvalExpr(element, prop.expr);
 
         elementSetElProp(element, prop.name, value);
     });

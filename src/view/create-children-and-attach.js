@@ -3,8 +3,6 @@
  * @author errorrik(errorrik@gmail.com)
  */
 
-var escapeHTML = require('../runtime/escape-html');
-var pushStrBuffer = require('../runtime/push-str-buffer');
 var each = require('../util/each');
 var createNode = require('./create-node');
 var nodeEvalExpr = require('./node-eval-expr');
@@ -13,20 +11,13 @@ var nodeEvalExpr = require('./node-eval-expr');
  * 生成子元素html
  *
  * @param {Element} element 元素
- * @param {Object} buf html串存储对象
  */
-function genElementChildrenHTML(element, buf) {
-    if (element.tagName === 'textarea') {
-        var valueProp = element.props.get('value');
-        if (valueProp) {
-            pushStrBuffer(buf, escapeHTML(nodeEvalExpr(element, valueProp.expr)));
-        }
-    }
-    else {
+function createChildrenAndAttach(element) {
+    if (element.tagName !== 'textarea') {
         var htmlDirective = element.aNode.directives.get('html');
 
         if (htmlDirective) {
-            pushStrBuffer(buf, nodeEvalExpr(element, htmlDirective.value));
+            element.el.innerHTML = nodeEvalExpr(element, htmlDirective.value);
         }
         else {
             each(element.aNode.children, function (aNodeChild) {
@@ -34,10 +25,10 @@ function genElementChildrenHTML(element, buf) {
                 if (!child._static) {
                     element.children.push(child);
                 }
-                child._attachHTML(buf);
+                child._doAttach(element._getEl());
             });
         }
     }
 }
 
-exports = module.exports = genElementChildrenHTML;
+exports = module.exports = createChildrenAndAttach;

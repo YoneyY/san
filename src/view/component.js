@@ -43,8 +43,6 @@ var elementOwnOnEl = require('./element-own-on-el');
 var elementOwnCreate = require('./element-own-create');
 var elementOwnAttach = require('./element-own-attach');
 var elementOwnDetach = require('./element-own-detach');
-var elementOwnAttachHTML = require('./element-own-attach-html');
-var elementOwnPushChildANode = require('./element-own-push-child-anode');
 
 var createDataTypesChecker = require('../util/create-data-types-checker');
 
@@ -650,13 +648,10 @@ Component.prototype._attached = function () {
 
 Component.prototype.attach = elementOwnAttach;
 Component.prototype.detach = elementOwnDetach;
-Component.prototype._attachHTML = elementOwnAttachHTML;
+Component.prototype._doAttach = elementOwnDoAttach;
 Component.prototype._create = elementOwnCreate;
 Component.prototype._getEl = elementOwnGetEl;
 Component.prototype._onEl = elementOwnOnEl;
 
-// #[begin] reverse
-Component.prototype._pushChildANode = elementOwnPushChildANode;
-// #[end]
 
 exports = module.exports = Component;

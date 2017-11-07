@@ -15,19 +15,15 @@ var parseExpr = require('../parser/parse-expr');
 var Data = require('../runtime/data');
 var DataChangeType = require('../runtime/data-change-type');
 var changeExprCompare = require('../runtime/change-expr-compare');
-var createStrBuffer = require('../runtime/create-str-buffer');
-var stringifyStrBuffer = require('../runtime/stringify-str-buffer');
 var removeEl = require('../browser/remove-el');
 
 var LifeCycle = require('./life-cycle');
 var attachings = require('./attachings');
-var genStumpHTML = require('./gen-stump-html');
 var nodeInit = require('./node-init');
 var NodeType = require('./node-type');
 var nodeEvalExpr = require('./node-eval-expr');
 var createNode = require('./create-node');
 var createNodeByEl = require('./create-node-by-el');
-var isEndStump = require('./is-end-stump');
 var getNodeStumpParent = require('./get-node-stump-parent');
 var nodeOwnSimpleDispose = require('./node-own-simple-dispose');
 var nodeOwnCreateStump = require('./node-own-create-stump');
@@ -152,48 +148,14 @@ function createFor(options) {
     node.detach = forOwnDetach;
     node.dispose = nodeOwnSimpleDispose;
 
-    node._attachHTML = forOwnAttachHTML;
+    node._doAttach = forOwnDoAttach;
     node._update = forOwnUpdate;
     node._create = nodeOwnCreateStump;
     node._getEl = nodeOwnGetStumpEl;
 
-    // #[begin] reverse
-    node._pushChildANode = empty;
-    // #[end]
 
     var aNode = node.aNode;
 
-    // #[begin] reverse
-    if (options.el) {
-        aNode = parseTemplate(options.stumpText).children[0];
-        node.aNode = aNode;
-
-        var index = 0;
-        var directive = aNode.directives.get('for');
-        var listData = nodeEvalExpr(node, directive.list) || [];
-
-        /* eslint-disable no-constant-condition */
-        while (1) {
-        /* eslint-enable no-constant-condition */
-            var next = options.elWalker.next;
-            if (isEndStump(next, 'for')) {
-                removeEl(options.el);
-                node.el = next;
-                options.elWalker.goNext();
-                break;
-            }
-
-            var itemScope = new ForItemData(node, listData[index], index);
-            var child = createNodeByEl(next, node, options.elWalker, itemScope);
-            node.children.push(child);
-
-            index++;
-            options.elWalker.goNext();
-        }
-
-        node.parent._pushChildANode(node.aNode);
-    }
-    // #[end]
 
     node.itemANode = createANode({
         children: aNode.children,
@@ -213,19 +175,25 @@ function createFor(options) {
  * @param {Object} buf html串存储对象
  * @param {boolean} onlyChildren 是否只attach列表本身html，不包括stump部分
  */
-function forOwnAttachHTML(buf, onlyChildren) {
+function forOwnDoAttach(parentEl, beforeEl) {
     var me = this;
     each(
         nodeEvalExpr(me, me.aNode.directives.get('for').list),
         function (item, i) {
             var child = createForDirectiveChild(me, item, i);
             me.children.push(child);
-            child._attachHTML(buf);
+            child._doAttach(parentEl, beforeEl);
         }
     );
 
-    if (!onlyChildren) {
-        genStumpHTML(me, buf);
+    this._create();
+    if (parentEl) {
+        if (beforeEl) {
+            parentEl.insertBefore(this.el, beforeEl);
+        }
+        else {
+            parentEl.appendChild(this.el);
+        }
     }
 }
 
@@ -237,65 +205,7 @@ function forOwnAttachHTML(buf, onlyChildren) {
  * @param {HTMLElement＝} beforeEl 要添加到哪个元素之前
  */
 function forOwnAttach(parentEl, beforeEl) {
-    this._create();
-    if (parentEl) {
-        if (beforeEl) {
-            parentEl.insertBefore(this.el, beforeEl);
-        }
-        else {
-            parentEl.appendChild(this.el);
-        }
-    }
-
-    // paint list
-    var el = this.el || parentEl.firstChild;
-    var prevEl = el && el.previousSibling;
-    var buf = createStrBuffer();
-
-    prev: while (prevEl) {
-        var nextPrev = prevEl.previousSibling;
-        switch (prevEl.nodeType) {
-            case 1:
-                break prev;
-
-            case 3:
-                if (!/^\s*$/.test(prevEl.textContent)) {
-                    break prev;
-                }
-
-                removeEl(prevEl);
-                break;
-
-        }
-
-        prevEl = nextPrev;
-    }
-
-    if (!prevEl) {
-        this._attachHTML(buf, 1);
-        // #[begin] error
-        warnSetHTML(parentEl);
-        // #[end]
-        parentEl.insertAdjacentHTML('afterbegin', stringifyStrBuffer(buf));
-    }
-    else if (prevEl.nodeType === 1) {
-        this._attachHTML(buf, 1);
-        // #[begin] error
-        warnSetHTML(parentEl);
-        // #[end]
-        prevEl.insertAdjacentHTML('afterend', stringifyStrBuffer(buf));
-    }
-    else {
-        each(
-            nodeEvalExpr(this, this.aNode.directives.get('for').list),
-            function (item, i) {
-                var child = createForDirectiveChild(this, item, i);
-                this.children.push(child);
-                child.attach(parentEl, el);
-            },
-            this
-        );
-    }
+    this._doAttach(parentEl, beforeEl);
 
     attachings.done();
 }
@@ -332,16 +242,6 @@ function forOwnUpdate(changes) {
 
     this._getEl();
     var parentEl = getNodeStumpParent(this);
-    var parentFirstChild = parentEl.firstChild;
-    var parentLastChild = parentEl.lastChild;
-
-    var isOnlyParentChild =
-        oldChildrenLen > 0 // 有孩子时
-            && parentFirstChild === this.children[0]._getEl()
-            && (parentLastChild === this.el || parentLastChild === this.children[oldChildrenLen - 1]._getEl())
-        || oldChildrenLen === 0 // 无孩子时
-            && parentFirstChild === this.el
-            && parentLastChild === this.el;
 
     var isChildrenRebuild;
 
@@ -506,79 +406,24 @@ function forOwnUpdate(changes) {
 
 
     // 清除应该干掉的 child
-    var violentClear = isOnlyParentChild && newChildrenLen === 0;
-
     each(disposeChildren, function (child) {
-        child.dispose(violentClear);
+        child.dispose();
     });
 
-    if (violentClear) {
-        parentEl.innerHTML = '';
-        this.el = document.createComment('san:' + this.id);
-        parentEl.appendChild(this.el);
-        return;
-    }
 
+    // 如果不attached则直接创建，如果存在则调用更新函数
+    var attachStump = this;
 
-    // 对相应的项进行更新
-    if (oldChildrenLen === 0 && isOnlyParentChild) {
-        var buf = createStrBuffer();
-        each(
-            this.children,
-            function (child) {
-                child._attachHTML(buf);
-            }
-        );
-        parentEl.innerHTML = stringifyStrBuffer(buf);
-        this.el = document.createComment('san:' + this.id);
-        parentEl.appendChild(this.el);
-    }
-    else {
-        // 如果不attached则直接创建，如果存在则调用更新函数
-
-        // var attachStump = this;
-
-        // while (newChildrenLen--) {
-        //     var child = this.children[newChildrenLen];
-        //     if (child.lifeCycle.attached) {
-        //         childrenChanges[newChildrenLen].length && child._update(childrenChanges[newChildrenLen]);
-        //     }
-        //     else {
-        //         child.attach(parentEl, attachStump._getEl() || parentEl.firstChild);
-        //     }
-
-        //     attachStump = child;
-        // }
-
-        var newChildBuf;
-
-        for (var i = 0; i < newChildrenLen; i++) {
-            var child = this.children[i];
-
-            if (child.lifeCycle.attached) {
-                childrenChanges[i].length && child._update(childrenChanges[i]);
-            }
-            else {
-                newChildBuf = newChildBuf || createStrBuffer();
-                child._attachHTML(newChildBuf);
-
-                // flush new children html
-                var nextChild = this.children[i + 1];
-                if (!nextChild || nextChild.lifeCycle.attached) {
-                    var beforeEl = nextChild && nextChild._getEl();
-                    if (!beforeEl) {
-                        beforeEl = document.createElement('script');
-                        parentEl.insertBefore(beforeEl, this.el || parentEl.firstChild);
-                    }
-                    beforeEl.insertAdjacentHTML('beforebegin', stringifyStrBuffer(newChildBuf));
-
-                    newChildBuf = null;
-                    if (!nextChild) {
-                        parentEl.removeChild(beforeEl);
-                    }
-                }
-            }
+    while (newChildrenLen--) {
+        var child = this.children[newChildrenLen];
+        if (child.lifeCycle.attached) {
+            childrenChanges[newChildrenLen].length && child._update(childrenChanges[newChildrenLen]);
         }
+        else {
+            child._doAttach(parentEl, attachStump._getEl() || parentEl.firstChild);
+        }
+
+        attachStump = child;
     }
 
     attachings.done();

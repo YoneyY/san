@@ -54,7 +54,7 @@ var defaultElementPropHandler = {
         if (svgTags[element.tagName] || !(propName in el)) {
             el.setAttribute(name, value);
         }
-        else {
+        else if (value != null) {
             el[propName] = value;
         }
 
@@ -188,8 +188,11 @@ var elementPropHandlers = {
 
     option: {
         value: {
-            attr: function (element, name, value) {
-                var attrStr = ' value="' + (value || '') + '"';
+            attr: defaultElementPropHandler.attr,
+
+            prop: function (element, name, value) {
+                defaultElementPropHandler.prop(element, name, value);
+
                 var parentSelect = element.parent;
                 while (parentSelect) {
                     if (parentSelect.tagName === 'select') {
@@ -215,14 +218,10 @@ var elementPropHandlers = {
                     }
 
                     if (selectValue === value) {
-                        attrStr += ' selected';
+                        element.el.selected = true;
                     }
                 }
-
-                return attrStr;
-            },
-
-            prop: defaultElementPropHandler.prop
+            }
         }
     },
 
@@ -260,8 +259,12 @@ function genBoolPropHandler(attrName) {
         },
 
         prop: function (element, name, value) {
+            var prop = element.props.get(name);
             var propName = HTML_ATTR_PROP_MAP[attrName] || attrName;
-            element.el[propName] = !!(value && value !== 'false' && value !== '0');
+            element.el[propName] = !!(
+                prop && prop.raw === ''
+                || value && value !== 'false' && value !== '0'
+            );
         }
     };
 }

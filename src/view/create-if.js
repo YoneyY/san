@@ -8,7 +8,6 @@ var empty = require('../util/empty');
 var IndexedList = require('../util/indexed-list');
 var parseTemplate = require('../parser/parse-template');
 var createANode = require('../parser/create-a-node');
-var genStumpHTML = require('./gen-stump-html');
 var nodeInit = require('./node-init');
 var NodeType = require('./node-type');
 var nodeEvalExpr = require('./node-eval-expr');
@@ -18,6 +17,7 @@ var getNodeStumpParent = require('./get-node-stump-parent');
 var elementUpdateChildren = require('./element-update-children');
 var elementDisposeChildren = require('./element-dispose-children');
 var nodeOwnSimpleDispose = require('./node-own-simple-dispose');
+var nodeOwnCreateStump = require('./node-own-create-stump');
 var nodeOwnGetStumpEl = require('./node-own-get-stump-el');
 
 /**
@@ -31,41 +31,12 @@ function createIf(options) {
     node.children = [];
     node._type = NodeType.IF;
 
+    node._create = nodeOwnCreateStump;
     node.dispose = nodeOwnSimpleDispose;
 
     node._getEl = nodeOwnGetStumpEl;
-    node._attachHTML = ifOwnAttachHTML;
+    node._doAttach = ifOwnDoAttach;
     node._update = ifOwnUpdate;
-
-    // #[begin] reverse
-    node._pushChildANode = empty;
-    // #[end]
-
-    // #[begin] reverse
-    if (options.el) {
-        if (options.el.nodeType === 8) {
-            var aNode = parseTemplate(options.stumpText).children[0];
-            node.aNode = aNode;
-        }
-        else {
-            node.elseIndex = -1;
-            var el = document.createComment('san:' + this.id);
-            options.el.parentNode.insertBefore(el, options.el.nextSibling);
-
-
-            options.el.removeAttribute('san-if');
-            options.el.removeAttribute('s-if');
-
-            var child = createNodeByEl(options.el, node, options.elWalker);
-            node.children[0] = child;
-            node.aNode.children = child.aNode.children.slice(0);
-
-            node.el = el;
-        }
-
-        node.parent._pushChildANode(node.aNode);
-    }
-    // #[end]
 
     node.cond = node.aNode.directives.get('if').value;
 
@@ -102,7 +73,7 @@ function createIfDirectiveChild(directiveANode, mainIf) {
  *
  * @param {Object} buf html串存储对象
  */
-function ifOwnAttachHTML(buf) {
+function ifOwnDoAttach(parentEl, beforeEl) {
     var me = this;
     var elseIndex;
     var child;
@@ -125,11 +96,17 @@ function ifOwnAttachHTML(buf) {
 
     if (child) {
         me.children[0] = child;
-        child._attachHTML(buf);
+        child._doAttach(parentEl, beforeEl);
         me.elseIndex = elseIndex;
     }
 
-    genStumpHTML(this, buf);
+    this._create();
+    if (beforeEl) {
+        parentEl.insertBefore(this.el, beforeEl);
+    }
+    else {
+        parentEl.appendChild(this.el);
+    }
 }
 
 /**

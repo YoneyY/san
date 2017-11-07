@@ -6,13 +6,10 @@
 var empty = require('../util/empty');
 var createANode = require('../parser/create-a-node');
 var NodeType = require('./node-type');
-var isEndStump = require('./is-end-stump');
-var genElementChildrenHTML = require('./gen-element-children-html');
 var nodeInit = require('./node-init');
 var nodeDispose = require('./node-dispose');
 var createNodeByEl = require('./create-node-by-el');
 var elementDisposeChildren = require('./element-dispose-children');
-var elementOwnPushChildANode = require('./element-own-push-child-anode');
 
 /**
  * 创建 slot 元素
@@ -24,34 +21,18 @@ function createSlot(options) {
     var literalOwner = options.owner;
     var aNode = createANode();
 
-    // #[begin] reverse
-    if (options.el) {
-        if (options.stumpText.indexOf('!') !== 0) {
-            options.owner = literalOwner.owner;
-            options.scope = literalOwner.scope;
-            options.stumpText = options.stumpText.slice(1);
-        }
-        this.name = options.stumpText || '____';
+
+    var nameBind = options.aNode.props.get('name');
+    options.name = nameBind ? nameBind.raw : '____';
+
+    var givenSlots = literalOwner.aNode.givenSlots;
+    var givenChildren = givenSlots && givenSlots[options.name];
+    aNode.children = givenChildren || options.aNode.children.slice(0);
+
+    if (givenChildren) {
+        options.owner = literalOwner.owner;
+        options.scope = literalOwner.scope;
     }
-    else {
-    // #[end]
-
-        var nameBind = options.aNode.props.get('name');
-        this.name = nameBind ? nameBind.raw : '____';
-
-        var givenSlots = literalOwner.aNode.givenSlots;
-        var givenChildren = givenSlots && givenSlots[this.name];
-        aNode.children = givenChildren || options.aNode.children.slice(0);
-
-        if (givenChildren) {
-            options.owner = literalOwner.owner;
-            options.scope = literalOwner.scope;
-        }
-
-    // #[begin] reverse
-    }
-    // #[end]
-
 
     options.aNode = aNode;
 
@@ -62,12 +43,9 @@ function createSlot(options) {
     node.dispose = slotOwnDispose;
 
     node._getEl = slotOwnGetEl;
-    node._attachHTML = slotOwnAttachHTML;
+    node._doAttach = slotOwnDoAttach;
     node._update = empty;
 
-    // #[begin] reverse
-    node._pushChildANode = elementOwnPushChildANode;
-    // #[end]
 
     var parent = node.parent;
     while (parent) {
@@ -84,39 +62,25 @@ function createSlot(options) {
         parent = parent.parent;
     }
 
-    // #[begin] reverse
-    if (options.el) {
-        /* eslint-disable no-constant-condition */
-        while (1) {
-        /* eslint-enable no-constant-condition */
-            var next = options.elWalker.next;
-            if (!next || isEndStump(next, 'slot')) {
-                next && options.elWalker.goNext();
-                break;
-            }
-
-            var child = createNodeByEl(next, node, options.elWalker);
-            node.children.push(child);
-            options.elWalker.goNext();
-        }
-
-        if (literalOwner !== node.owner) {
-            literalOwner.aNode.givenSlots[node.name] = node.aNode;
-        }
-    }
-    // #[end]
-
     return node;
 }
 
 
 /**
- * attach元素的html
+ * 将元素attach到页面
  *
- * @param {Object} buf html串存储对象
+ * @param {HTMLElement} parentEl 要添加到的父元素
+ * @param {HTMLElement=} beforeEl 要添加到哪个元素之前
  */
-function slotOwnAttachHTML(buf) {
-    genElementChildrenHTML(this, buf);
+function slotOwnDoAttach(parentEl, beforeEl) {
+    var me = this;
+    each(me.aNode.children, function (aNodeChild) {
+        var child = createNode(aNodeChild, me);
+        if (!child._static) {
+            me.children.push(child);
+        }
+        child._doAttach(parentEl, beforeEl);
+    });
 }
 
 /**

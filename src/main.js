@@ -40,14 +40,10 @@
     // require('./runtime/binary-op');
     // require('./runtime/eval-expr');
     // require('./view/life-cycle');
-    // require('./view/gen-stump-html');
     // require('./view/create-text');
     // require('./view/get-prop-handler');
     // require('./view/is-data-change-by-element');
     // require('./view/event-declaration-listener');
-    // require('./view/gen-element-start-html');
-    // require('./view/gen-element-end-html');
-    // require('./view/gen-element-children-html');
     // require('./view/create-node');
     // require('./parser/parse-anode-from-el');
     // require('./view/from-el-init-children');
@@ -64,7 +60,6 @@
     var Component = require('./view/component');
     var defineComponent = require('./view/define-component');
     var emitDevtool = require('./util/emit-devtool');
-    var compileJSSource = require('./view/compile-js-source');
     var DataTypes = require('./util/data-types');
 
 
@@ -83,34 +78,6 @@
          * @type {boolean}
          */
         debug: true,
-        // #[end]
-
-        // #[begin] ssr
-        /**
-         * 将组件类编译成 renderer 方法
-         *
-         * @param {Function} ComponentClass 组件类
-         * @return {function(Object):string}
-         */
-        compileToRenderer: function (ComponentClass) {
-            var renderer = ComponentClass.__ssrRenderer;
-
-            if (!renderer) {
-                var code = compileJSSource(ComponentClass);
-                renderer = (new Function('return ' + code))();
-                ComponentClass.__ssrRenderer = renderer;
-            }
-
-            return renderer;
-        },
-
-        /**
-         * 将组件类编译成 renderer 方法的源文件
-         *
-         * @param {Function} ComponentClass 组件类
-         * @return {string}
-         */
-        compileToSource: compileJSSource,
         // #[end]
 
         /**

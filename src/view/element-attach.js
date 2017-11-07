@@ -3,10 +3,7 @@
  * @author errorrik(errorrik@gmail.com)
  */
 
-var createStrBuffer = require('../runtime/create-str-buffer');
-var stringifyStrBuffer = require('../runtime/stringify-str-buffer');
-var genElementChildrenHTML = require('./gen-element-children-html');
-var warnSetHTML = require('./warn-set-html');
+var createChildrenAndAttach = require('./create-children-and-attach');
 
 /**
  * 将元素attach到页面
@@ -27,19 +24,7 @@ function elementAttach(element, parentEl, beforeEl) {
     }
 
     if (!element._contentReady) {
-        var buf = createStrBuffer();
-        genElementChildrenHTML(element, buf);
-
-        // html 没内容就不要设置 innerHTML了
-        // 这里还能避免在 IE 下 component root 为 input 等元素时设置 innerHTML 报错的问题
-        var html = stringifyStrBuffer(buf);
-        if (html) {
-            // #[begin] error
-            warnSetHTML(element.el);
-            // #[end]
-            element.el.innerHTML = html;
-        }
-
+        createChildrenAndAttach(element);
         element._contentReady = 1;
     }
 }

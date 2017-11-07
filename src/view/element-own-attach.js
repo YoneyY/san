@@ -11,7 +11,7 @@ var attachings = require('./attachings');
  * 将元素attach到页面
  *
  * @param {HTMLElement} parentEl 要添加到的父元素
- * @param {HTMLElement＝} beforeEl 要添加到哪个元素之前
+ * @param {HTMLElement=} beforeEl 要添加到哪个元素之前
  */
 function elementOwnAttach(parentEl, beforeEl) {
     if (!this.lifeCycle.attached) {

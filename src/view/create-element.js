@@ -15,7 +15,6 @@ var LifeCycle = require('./life-cycle');
 var nodeInit = require('./node-init');
 var nodeEvalExpr = require('./node-eval-expr');
 var elementUpdateChildren = require('./element-update-children');
-var elementOwnAttachHTML = require('./element-own-attach-html');
 var elementOwnCreate = require('./element-own-create');
 var elementOwnAttach = require('./element-own-attach');
 var elementOwnDetach = require('./element-own-detach');
@@ -26,7 +25,6 @@ var elementAttached = require('./element-attached');
 var elementSetElProp = require('./element-set-el-prop');
 var elementInitProps = require('./element-init-props');
 var elementInitTagName = require('./element-init-tag-name');
-var elementOwnPushChildANode = require('./element-own-push-child-anode');
 var warnSetHTML = require('./warn-set-html');
 
 /**
@@ -44,38 +42,15 @@ function createElement(options) {
     node.attach = elementOwnAttach;
     node.detach = elementOwnDetach;
     node.dispose = elementOwnDispose;
-    node._attachHTML = elementOwnAttachHTML;
     node._update = elementOwnUpdate;
     node._create = elementOwnCreate;
     node._attached = elementOwnAttached;
+    node._doAttach = elementOwnDoAttach;
     node._getEl = elementOwnGetEl;
     node._toPhase = elementOwnToPhase;
     node._onEl = elementOwnOnEl;
 
     elementInitProps(node);
-
-    // #[begin] reverse
-    node._pushChildANode = elementOwnPushChildANode;
-
-    if (node.el) {
-        node.aNode = parseANodeFromEl(node.el);
-        node.parent && node.parent._pushChildANode(node.aNode);
-        node.tagName = node.aNode.tagName;
-
-        if (!node.aNode.directives.get('html')) {
-            fromElInitChildren(node);
-        }
-        node.el.id = node.id;
-
-        node.dynamicProps = new IndexedList();
-        node.aNode.props.each(function (prop) {
-            if (!prop.attr) {
-                node.dynamicProps.push(prop);
-            }
-        });
-        attachings.add(node);
-    }
-    // #[end]
 
     elementInitTagName(node);
     node.props = node.aNode.props;
@@ -83,6 +58,34 @@ function createElement(options) {
 
     node._toPhase('inited');
     return node;
+}
+
+/**
+ * 将元素attach到页面
+ *
+ * @param {HTMLElement} parentEl 要添加到的父元素
+ * @param {HTMLElement=} beforeEl 要添加到哪个元素之前
+ */
+function elementOwnDoAttach(parentEl, beforeEl) {
+    if (this.lifeCycle.attached) {
+        return;
+    }
+
+    this._create();
+    if (parentEl) {
+        if (beforeEl) {
+            parentEl.insertBefore(this.el, beforeEl);
+        }
+        else {
+            parentEl.appendChild(this.el);
+        }
+    }
+
+    if (!this._contentReady) {
+        createChildrenAndAttach(this);
+    }
+
+    attachings.add(this);
 }
 
 /**
